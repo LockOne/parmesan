@@ -5,7 +5,7 @@ use crate::{
 use rand::prelude::*;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, RwLock,
+    Arc, RwLock, Mutex
 };
 
 pub fn fuzz_loop(
@@ -14,6 +14,8 @@ pub fn fuzz_loop(
     depot: Arc<Depot>,
     global_branches: Arc<GlobalBranches>,
     global_stats: Arc<RwLock<stats::ChartStats>>,
+    func_rel_map : Arc<RwLock<Box<[Box<[usize]>]>>>,
+    branch_cov : Arc<Mutex<Vec<(u32,u32,u32,u32)>>>,
 ) {
     let search_method = cmd_opt.search_method;
     let mut executor = Executor::new(
@@ -21,6 +23,8 @@ pub fn fuzz_loop(
         global_branches.clone(),
         depot.clone(),
         global_stats.clone(),
+        func_rel_map.clone(),
+        branch_cov.clone(),
     );
 
     let san_cmd_opt = cmd_opt.sanopt();
@@ -30,6 +34,8 @@ pub fn fuzz_loop(
         global_branches.clone(),
         depot.clone(),
         global_stats.clone(),
+        func_rel_map.clone(),
+        branch_cov.clone(),
     );
 
 
@@ -77,9 +83,9 @@ pub fn fuzz_loop(
         {
             let fuzz_type = cond.get_fuzz_type();
             if cond.is_target {
-                info!("Using Sanopt Executor");
+                debug!("Using Sanopt Executor");
             } else {
-                info!("Using normal Executor");
+                debug!("Using normal Executor");
             }
             let mut cur_executor = if cond.is_target {&mut sanitized_executor} else {&mut executor};
 

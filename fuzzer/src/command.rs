@@ -56,14 +56,6 @@ pub struct CommandOpt {
     pub directed_only: bool,
 }
 
-pub fn make_absolute(path: &Path) -> PathBuf {
-    if path.is_relative() {
-        let abs_path = env::current_dir().unwrap();
-        return abs_path.join(path);
-    }
-    path.to_path_buf()
-}
-
 pub fn make_absolute_str(path_str: &str) -> String {
     let path = Path::new(path_str);
     if path.is_relative() {

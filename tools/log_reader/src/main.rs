@@ -2,7 +2,6 @@ use std::env;
 use runtime::get_log_data;
 use std::path::Path;
 
-#[macro_use]
 extern crate serde_json;
 
 fn main() {

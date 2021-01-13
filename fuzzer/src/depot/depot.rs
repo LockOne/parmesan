@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Mutex, RwLock,
+        Mutex, RwLock, Arc
     },
 };
 // https://crates.io/crates/priority-queue
@@ -110,7 +110,7 @@ impl Depot {
             })
     }
 
-    pub fn add_entries(&self, conds: Vec<CondStmt>) {
+    pub fn add_entries(&self, conds: Vec<CondStmt>,  target_cond : (u32,u32), branch_cov : &Arc<Mutex<Vec<(u32,u32,u32,u32)>>>) {
         let mut q = match self.queue.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
@@ -131,6 +131,11 @@ impl Depot {
                         // If existed one and our new one has two different conditions,
                         // this indicate that it is explored.
                         if v.0.base.condition != cond.base.condition {
+                            let mut branch_cov_write = match branch_cov.lock() {
+                                Ok(g) => g,
+                                Err(p) => p.into_inner(),
+                            };
+                            (*branch_cov_write).push((target_cond.0,target_cond.1,v.0.base.cmpid, v.0.base.func));
                             v.0.mark_as_done();
                             q.change_priority(&cond, QPriority::done());
                         } else {

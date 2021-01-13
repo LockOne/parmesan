@@ -9,14 +9,15 @@ use crate::{
 use angora_common::{config, defs, tag::TagSeg};
 
 use std::{
-    collections::HashMap,
+    collections::{HashSet, HashMap},
     path::Path,
     process::{Command, Stdio},
     sync::{
         atomic::{compiler_fence, Ordering},
-        Arc, RwLock,
+        Arc, RwLock, Mutex
     },
     time,
+    ops::DerefMut,
 };
 use wait_timeout::ChildExt;
 use itertools::Itertools;
@@ -32,10 +33,12 @@ pub struct Executor {
     tmout_cnt: usize,
     invariable_cnt: usize,
     pub last_f: u64,
+    pub func_rel_map : Arc<RwLock<Box<[Box<[usize]>]>>>,
     pub has_new_path: bool,
     pub global_stats: Arc<RwLock<stats::ChartStats>>,
     pub local_stats: stats::LocalStats,
     is_directed: bool,
+    pub branch_cov : Arc<Mutex<Vec<(u32,u32,u32,u32)>>>,
 }
 
 impl Executor {
@@ -44,6 +47,8 @@ impl Executor {
         global_branches: Arc<branches::GlobalBranches>,
         depot: Arc<depot::Depot>,
         global_stats: Arc<RwLock<stats::ChartStats>>,
+        func_rel_map : Arc<RwLock<Box<[Box<[usize]>]>>>,
+        branch_cov : Arc<Mutex<Vec<(u32,u32,u32,u32)>>>,
     ) -> Self {
         // ** Share Memory **
         let branches = branches::Branches::new(global_branches);
@@ -101,6 +106,8 @@ impl Executor {
             global_stats,
             local_stats: Default::default(),
             is_directed,
+            func_rel_map : func_rel_map,
+            branch_cov : branch_cov,
         }
     }
 
@@ -135,6 +142,7 @@ impl Executor {
         {
             cond.is_consistent = false;
             warn!("inconsistent : {:?}", cond);
+            
         }
     }
 
@@ -195,7 +203,7 @@ impl Executor {
         skip |= self.check_invariable(output, cond);
         self.check_consistent(output, cond);
 
-        self.do_if_has_new(buf, status, explored, cond.base.cmpid);
+        self.do_if_has_new(buf, status, explored, cond.base.cmpid, cond.base.func);
         status = self.check_timeout(status, cond);
 
         if skip {
@@ -231,7 +239,7 @@ impl Executor {
         skip
     }
 
-    fn do_if_has_new(&mut self, buf: &Vec<u8>, status: StatusType, _explored: bool, cmpid: u32) {
+    fn do_if_has_new(&mut self, buf: &Vec<u8>, status: StatusType, _explored: bool, cmpid: u32, func: u32) {
         // new edge: one byte in bitmap
         let (has_new_path, has_new_edge, edge_num) = self.branches.has_new(status, self.is_directed);
 
@@ -258,12 +266,13 @@ impl Executor {
                 if !crash_or_tmout {
                     let cond_stmts = self.track(id, buf, speed);
                     if cond_stmts.len() > 0 {
-                        self.depot.add_entries(cond_stmts);
+                        self.get_func_and_record(&cond_stmts);
+                        self.depot.add_entries(cond_stmts, (cmpid, func), &self.branch_cov);
                         if self.cmd.enable_afl {
                             self.depot
                                 .add_entries(vec![cond_stmt::CondStmt::get_afl_cond(
                                     id, speed, edge_num,
-                                )]);
+                                )], (cmpid, func), &self.branch_cov);
                         }
                     }
                 }
@@ -274,20 +283,39 @@ impl Executor {
     pub fn run(&mut self, buf: &Vec<u8>, cond: &mut cond_stmt::CondStmt) -> StatusType {
         self.run_init();
         let status = self.run_inner(buf);
-        self.do_if_has_new(buf, status, false, 0);
+        self.do_if_has_new(buf, status, false, cond.base.cmpid, cond.base.func);
         self.check_timeout(status, cond)
     }
 
     pub fn run_sync(&mut self, buf: &Vec<u8>) {
         self.run_init();
         let status = self.run_inner(buf);
-        self.do_if_has_new(buf, status, false, 0);
+        self.do_if_has_new(buf, status, false, 0, 0);
     }
 
     fn run_init(&mut self) {
         self.has_new_path = false;
         self.local_stats.num_exec.count();
     }
+
+    pub fn get_func_and_record(&mut self, cond_list : &Vec<cond_stmt::CondStmt>) {
+        //the set of all executed function
+        let mut func_set : HashSet<usize> = HashSet::new();
+        for c in cond_list{
+          func_set.insert(c.base.func as usize);
+        }
+  
+        let mut write_lock = match self.func_rel_map.write() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        
+        for f1 in &func_set{
+          for f2 in &func_set{
+              (*write_lock).deref_mut()[*f1].deref_mut()[*f2] += 1;
+          }
+        }
+      }
 
     fn check_timeout(&mut self, status: StatusType, cond: &mut cond_stmt::CondStmt) -> StatusType {
         let mut ret_status = status;
@@ -352,6 +380,8 @@ impl Executor {
             defs::TRACK_OUTPUT_VAR.to_string(),
             self.cmd.track_path.clone(),
         );
+
+        debug!("track execute id : {}", id);
 
         let t_now: stats::TimeIns = Default::default();
 
@@ -426,7 +456,6 @@ impl Executor {
                 ind_cond_list.push(fixed_cond);
             }
 
-            
         }
 
 

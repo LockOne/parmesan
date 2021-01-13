@@ -9,6 +9,7 @@ pub struct CondStmtBase {
     pub last_callsite: u32,
     pub order: u32,
     pub belong: u32,
+    pub func : u32,
 
     pub condition: u32,
     pub level: u32,

@@ -66,6 +66,7 @@ public:
   bool is_bc;
   unsigned int inst_ratio = 100;
   llvm::ValueMap<const llvm::Value *, u32> IdMap;
+  u32 curFuncId = 0;
 
   // Const Variables
   DenseSet<u32> UniqCidSet;
@@ -292,7 +293,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
                            ConstantInt::get(Int32Ty, 0), "__angora_prev_loc", 0,
                            GlobalVariable::GeneralDynamicTLSModel, 0, false);
 
-    Type *TraceCmpArgs[5] = {Int32Ty, Int32Ty, Int32Ty, Int64Ty, Int64Ty};
+    Type *TraceCmpArgs[6] = {Int32Ty, Int32Ty, Int32Ty, Int64Ty, Int64Ty, Int32Ty};
     TraceCmpTy = FunctionType::get(Int32Ty, TraceCmpArgs, false);
     TraceCmp = M.getOrInsertFunction("__angora_trace_cmp", TraceCmpTy);
     if (Function *F = dyn_cast<Function>(TraceCmp)) {
@@ -312,8 +313,8 @@ void AngoraLLVMPass::initVariables(Module &M) {
     }
 
   } else if (TrackMode) {
-    Type *TraceCmpTtArgs[8] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int32Ty,
-                               Int64Ty, Int64Ty, Int32Ty};
+    Type *TraceCmpTtArgs[9] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int32Ty,
+                               Int64Ty, Int64Ty, Int32Ty, Int32Ty};
     TraceCmpTtTy = FunctionType::get(VoidTy, TraceCmpTtArgs, false);
     TraceCmpTT = M.getOrInsertFunction("__angora_trace_cmp_tt", TraceCmpTtTy);
     if (Function *F = dyn_cast<Function>(TraceCmpTT)) {
@@ -321,8 +322,8 @@ void AngoraLLVMPass::initVariables(Module &M) {
       F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::ReadNone);
     }
 
-    Type *TraceSwTtArgs[7] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty,
-                              Int64Ty, Int32Ty, Int64PtrTy};
+    Type *TraceSwTtArgs[8] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty,
+                              Int64Ty, Int32Ty, Int64PtrTy, Int32Ty};
     TraceSwTtTy = FunctionType::get(VoidTy, TraceSwTtArgs, false);
     TraceSwTT = M.getOrInsertFunction("__angora_trace_switch_tt", TraceSwTtTy);
     if (Function *F = dyn_cast<Function>(TraceSwTT)) {
@@ -330,7 +331,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
       F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::ReadNone);
     }
 
-    Type *TraceFnTtArgs[6] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int8PtrTy, Int8PtrTy};
+    Type *TraceFnTtArgs[7] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int8PtrTy, Int8PtrTy, Int32Ty};
     TraceFnTtTy = FunctionType::get(VoidTy, TraceFnTtArgs, false);
     TraceFnTT = M.getOrInsertFunction("__angora_trace_fn_tt", TraceFnTtTy);
     if (Function *F = dyn_cast<Function>(TraceFnTT)) {
@@ -338,7 +339,7 @@ void AngoraLLVMPass::initVariables(Module &M) {
       F->addAttribute(LLVM_ATTRIBUTE_LIST::FunctionIndex, Attribute::ReadOnly);
     }
 
-    Type *TraceExploitTtArgs[6] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int64Ty};
+    Type *TraceExploitTtArgs[7] = {Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int32Ty, Int64Ty, Int32Ty};
     TraceExploitTtTy = FunctionType::get(VoidTy, TraceExploitTtArgs, false);
     TraceExploitTT = M.getOrInsertFunction("__angora_trace_exploit_val_tt",
                                            TraceExploitTtTy);
@@ -623,8 +624,9 @@ void AngoraLLVMPass::visitCompareFunc(Instruction *Inst) {
 
   LoadInst *CallSite = IRB.CreateLoad(ParmeSanIndCallSite);
   setInsNonSan(CallSite);
+  ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
   CallInst *ProxyCall =
-      IRB.CreateCall(TraceFnTT, {Cid, CurCtx, CallSite, ArgSize, OpArg[0], OpArg[1]});
+      IRB.CreateCall(TraceFnTT, {Cid, CurCtx, CallSite, ArgSize, OpArg[0], OpArg[1], Fid});
   setInsNonSan(ProxyCall);
   //resetIndirectCallContext(&IRB);
 }
@@ -701,8 +703,9 @@ void AngoraLLVMPass::processCmp(Instruction *Cond, Constant *Cid,
     setValueNonSan(CondExt);
     LoadInst *CurCtx = ThenB.CreateLoad(AngoraContext);
     setInsNonSan(CurCtx);
+    ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
     CallInst *ProxyCall =
-        ThenB.CreateCall(TraceCmp, {CondExt, Cid, CurCtx, OpArg[0], OpArg[1]});
+        ThenB.CreateCall(TraceCmp, {CondExt, Cid, CurCtx, OpArg[0], OpArg[1], Fid});
     setInsNonSan(ProxyCall);
   } else if (TrackMode) {
     Value *SizeArg = ConstantInt::get(Int32Ty, num_bytes);
@@ -723,9 +726,10 @@ void AngoraLLVMPass::processCmp(Instruction *Cond, Constant *Cid,
     // TODO: ParmeSan
     LoadInst *CallSite = IRB.CreateLoad(ParmeSanIndCallSite);
     setInsNonSan(CallSite);
+    ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
     CallInst *ProxyCall =
         IRB.CreateCall(TraceCmpTT, {Cid, CurCtx, CallSite, SizeArg, TypeArg, OpArg[0],
-                                    OpArg[1], CondExt});
+                                    OpArg[1], CondExt, Fid});
     setInsNonSan(ProxyCall);
     resetIndirectCallContext(&IRB);
   }
@@ -754,8 +758,9 @@ void AngoraLLVMPass::processBoolCmp(Value *Cond, Constant *Cid,
     setValueNonSan(OpArg[0]);
     LoadInst *CurCtx = ThenB.CreateLoad(AngoraContext);
     setInsNonSan(CurCtx);
+    ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
     CallInst *ProxyCall =
-        ThenB.CreateCall(TraceCmp, {CondExt, Cid, CurCtx, OpArg[0], OpArg[1]});
+        ThenB.CreateCall(TraceCmp, {CondExt, Cid, CurCtx, OpArg[0], OpArg[1], Fid});
     setInsNonSan(ProxyCall);
   } else if (TrackMode) {
     Value *SizeArg = ConstantInt::get(Int32Ty, 1);
@@ -769,9 +774,10 @@ void AngoraLLVMPass::processBoolCmp(Value *Cond, Constant *Cid,
 
     LoadInst *CallSite = IRB.CreateLoad(ParmeSanIndCallSite);
     setInsNonSan(CallSite);
+    ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
     CallInst *ProxyCall =
         IRB.CreateCall(TraceCmpTT, {Cid, CurCtx, CallSite, SizeArg, TypeArg, OpArg[0],
-                                    OpArg[1], CondExt});
+                                    OpArg[1], CondExt, Fid});
     setInsNonSan(ProxyCall);
     resetIndirectCallContext(&IRB);
   }
@@ -856,8 +862,9 @@ void AngoraLLVMPass::visitSwitchInst(Module &M, Instruction *Inst) {
 
     LoadInst *CallSite = IRB.CreateLoad(ParmeSanIndCallSite);
     setInsNonSan(CallSite);
+    ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
     CallInst *ProxyCall = IRB.CreateCall(
-        TraceSwTT, {Cid, CurCtx, CallSite, SizeArg, CondExt, SwNum, ArrPtr});
+        TraceSwTT, {Cid, CurCtx, CallSite, SizeArg, CondExt, SwNum, ArrPtr, Fid});
     setInsNonSan(ProxyCall);
     resetIndirectCallContext(&IRB);
   }
@@ -902,8 +909,9 @@ void AngoraLLVMPass::visitExploitation(Instruction *Inst) {
             setInsNonSan(CurCtx);
             LoadInst *CallSite = IRB.CreateLoad(ParmeSanIndCallSite);
             setInsNonSan(CallSite);
+            ConstantInt *Fid = ConstantInt::get(Int32Ty, curFuncId);
             CallInst *ProxyCall = IRB.CreateCall(
-                TraceExploitTT, {Cid, CurCtx, CallSite, SizeArg, TypeArg, ParamVal});
+                TraceExploitTT, {Cid, CurCtx, CallSite, SizeArg, TypeArg, ParamVal, Fid});
             setInsNonSan(ProxyCall);
             //resetIndirectCallContext(&IRB);
           }
@@ -926,6 +934,8 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
   }
 
   initVariables(M);
+
+  curFuncId = 0;
 
   if (DFSanMode)
     return true;
@@ -971,6 +981,15 @@ bool AngoraLLVMPass::runOnModule(Module &M) {
         }
       }
     }
+
+    curFuncId ++;
+  }
+
+  if (FastMode) {
+    std::ofstream func;
+    func.open("angora_func_id", std::ofstream::out | std::ofstream::trunc);
+    func << curFuncId;
+    func.close();
   }
 
   if (is_bc)

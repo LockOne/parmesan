@@ -7,3 +7,4 @@ mod shm_branches;
 
 #[macro_use]
 extern crate ctor;
+extern crate libc;

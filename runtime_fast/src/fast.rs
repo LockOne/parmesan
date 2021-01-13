@@ -1,12 +1,18 @@
 use super::{shm_conds, forkcli, shm_branches};
 use std::ops::DerefMut;
-
+use std::ptr;
 use std::sync::Once;
 
 static START: Once = Once::new();
 
+use libc::{c_char, c_int};
+
+extern "C" {
+    fn printf(fmt : *const c_char, ...) -> c_int;
+}
+
 #[ctor]
-fn fast_init() {
+fn fast_init() { 
     START.call_once(|| {
         shm_branches::map_branch_counting_shm();
         forkcli::start_forkcli();
@@ -20,7 +26,14 @@ pub extern "C" fn __angora_trace_cmp(
     context: u32,
     arg1: u64,
     arg2: u64,
+    func : u32,
 ) -> u32 {
+    unsafe {
+        printf("fast cmp : %d,%d,%d\n\0".as_ptr() as *const i8, cmpid, condition, func);
+        let a : * mut i8 = ptr::null_mut();
+        *a = 4;
+    }
+
     let mut conds = shm_conds::SHM_CONDS.lock().expect("SHM mutex poisoned.");
     match conds.deref_mut() {
         &mut Some(ref mut c) => {

@@ -37,6 +37,7 @@ pub extern "C" fn __angora_trace_cmp_tt(
     _e: u64,
     _f: u64,
     _g: u32,
+    _h: u32,
 ) {
     panic!("Forbid calling __angora_trace_cmp_tt directly");
 }
@@ -52,6 +53,7 @@ pub extern "C" fn __dfsw___angora_trace_cmp_tt(
     arg1: u64,
     arg2: u64,
     condition: u32,
+    func: u32,
     _l0: DfsanLabel,
     _l1: DfsanLabel,
     _lcallsite: DfsanLabel,
@@ -73,7 +75,7 @@ pub extern "C" fn __dfsw___angora_trace_cmp_tt(
     infer_shape(lb1, size);
     infer_shape(lb2, size);
 
-    log_cmp_callsite(cmpid, context, last_callsite, condition, op, size, lb1, lb2, arg1, arg2);
+    log_cmp_callsite(cmpid, context, last_callsite, condition, op, size, lb1, lb2, arg1, arg2, func);
 }
 
 #[no_mangle]
@@ -84,7 +86,8 @@ pub extern "C" fn __angora_trace_switch_tt(
     _c: u32,
     _d: u64,
     _e: u32,
-    _f: *mut u64
+    _f: *mut u64,
+    _g : u32,
 ) {
     panic!("Forbid calling __angora_trace_switch_tt directly");
 }
@@ -99,6 +102,7 @@ pub extern "C" fn __dfsw___angora_trace_switch_tt(
     condition: u64,
     num: u32,
     args: *mut u64,
+    func : u32,
     _l0: DfsanLabel,
     _l1: DfsanLabel,
     _lcallsite: DfsanLabel,
@@ -133,6 +137,7 @@ pub extern "C" fn __dfsw___angora_trace_switch_tt(
         lb2: 0,
         arg1: condition,
         arg2: 0,
+        func,
     };
 
     let sw_args = unsafe { slice::from_raw_parts(args, num as usize) };
@@ -209,6 +214,7 @@ pub extern "C" fn __dfsw___angora_trace_fn_tt(
         lb2: 0,
         arg1: 0,
         arg2: 0,
+        func : 0,
     };
 
     if lb1 > 0 {
@@ -233,6 +239,7 @@ pub extern "C" fn __angora_trace_exploit_val_tt(
     _c: u32,
     _d: u32,
     _e: u64,
+    _f: u32,
 ) {
     panic!("Forbid calling __angora_trace_exploit_val_tt directly");
 }
@@ -245,6 +252,7 @@ pub extern "C" fn __dfsw___angora_trace_exploit_val_tt(
     size: u32,
     op: u32,
     val: u64,
+    func : u32,
     _l0: DfsanLabel,
     _l1: DfsanLabel,
     _lcallsite: DfsanLabel,
@@ -257,7 +265,7 @@ pub extern "C" fn __dfsw___angora_trace_exploit_val_tt(
         return;
     }
 
-    log_cmp_callsite(cmpid, context, last_callsite,  defs::COND_FALSE_ST, op, size, lb, 0, val, 0);
+    log_cmp_callsite(cmpid, context, last_callsite,  defs::COND_FALSE_ST, op, size, lb, 0, val, 0, func);
 }
 
 
@@ -273,9 +281,10 @@ fn log_cmp(
     lb2: u32,
     arg1: u64,
     arg2: u64,
+    func: u32,
 ) {
 
-    log_cmp_callsite(cmpid, context, 0, condition, op, size, lb1, lb2, arg1, arg2)
+    log_cmp_callsite(cmpid, context, 0, condition, op, size, lb1, lb2, arg1, arg2, func)
 }
 
 
@@ -291,6 +300,7 @@ fn log_cmp_callsite(
     lb2: u32,
     arg1: u64,
     arg2: u64,
+    func : u32,
 ) {
     let cond = CondStmtBase {
         cmpid,
@@ -306,6 +316,7 @@ fn log_cmp_callsite(
         lb2,
         arg1,
         arg2,
+        func,
     };
     //println!("[CMP] id: {}, ctx: {}, last_callsite: {}", cmpid, context, last_callsite);
     let mut lcl = LC.lock().expect("Could not lock LC.");

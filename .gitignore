@@ -1,0 +1,13 @@
+.vscode
+*.swp
+
+llvm_mode/build
+bin
+target
+tools/llvm-diff-parmesan/build
+tools/llvm-diff-parmesan/build-pass
+out_*
+
+FInfos
+subjects
+

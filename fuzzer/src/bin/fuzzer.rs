@@ -97,6 +97,12 @@ fn main() {
             .short("D")
             .long("only_directed")
             .help("Only consider CMPs that have a path to one of the targets (Warn: only use if static CFG is sufficient.)"))
+        .arg(Arg::with_name("num_of_func")
+            .short("C")
+            .long("num_of_func")
+            .value_name("FUNC2")
+            .help("Function info txt file")
+            .takes_value(true))
         .get_matches();
 
     fuzz_main(
@@ -115,5 +121,6 @@ fn main() {
         matches.value_of("cfg_file").unwrap(),
         matches.value_of("sanopt_target"),
         matches.occurrences_of("only_directed") > 0,
+        matches.value_of("num_of_func"),
     );
 }

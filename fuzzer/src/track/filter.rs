@@ -78,6 +78,10 @@ fn filter_eof(cond: &CondStmt) -> bool {
         && cond.base.size == 4
 }
 
+fn no_label(cond : &CondStmt) -> bool {
+    cond.base.lb1 == 0 && cond.base.lb2 == 0
+}
+
 pub fn filter_cond_list(cond_list: &mut Vec<CondStmt>) {
     // mark conds we don;t use in future to be undesirable
     // those undesirable ones won't be added to depot in `depot.rs`
@@ -87,7 +91,7 @@ pub fn filter_cond_list(cond_list: &mut Vec<CondStmt>) {
     let mut dedup_explore = 0;
 
     for cond in cond_list {
-        if has_no_taint(cond) || exceed_max_order(cond) || size_not_match(cond) || filter_eof(cond)
+        if has_no_taint(cond) || exceed_max_order(cond) || size_not_match(cond) || filter_eof(cond) || no_label(cond)
         {
             cond.is_desirable = false;
         } else if cond.base.is_exploitable() {

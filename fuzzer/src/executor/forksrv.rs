@@ -49,6 +49,9 @@ impl Forksrv {
         let mut envs_fk = envs.clone();
         envs_fk.insert(ENABLE_FORKSRV.to_string(), String::from("TRUE"));
         envs_fk.insert(FORKSRV_SOCKET_PATH_VAR.to_string(), socket_path.to_owned());
+
+        debug!("target.0 : {}", target.0);
+        debug!("target.1 : {:?}", target.1);
         match Command::new(&target.0)
             .args(&target.1)
             .stdin(Stdio::null())
@@ -67,6 +70,8 @@ impl Forksrv {
             }
         };
 
+        debug!("command spwaned");
+
         // FIXME: block here if client doesn't exist.
         let (socket, _) = match listener.accept() {
             Ok(a) => a,
@@ -75,6 +80,8 @@ impl Forksrv {
                 panic!();
             }
         };
+
+        debug!("listener accepted");
 
         socket
             .set_read_timeout(Some(Duration::from_secs(time_limit)))
@@ -94,6 +101,8 @@ impl Forksrv {
     }
 
     pub fn run(&mut self) -> StatusType {
+        debug!("forksrv run");
+
         if self.socket.write(&FORKSRV_NEW_CHILD).is_err() {
             warn!("Fail to write socket!!");
             return StatusType::Error;
