@@ -12,6 +12,8 @@ if(NOT LLVM_FOUND)
   include(AddLLVM)
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
 set(PASS_NAME "LLVM${PROJECT_NAME}")
 
 add_subdirectory(src)

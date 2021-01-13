@@ -18,6 +18,8 @@ set(ANGORA_LIB_DIR "lib")
 set(ANGORA_RULE_DIR "rules")
 set(ANGORA_PASS_DIR "pass")
 
+set(CMAKE_CXX_FLAGS "-std=c++11")
+
 add_subdirectory(compiler)
 add_subdirectory(pass)
 add_subdirectory(rules)

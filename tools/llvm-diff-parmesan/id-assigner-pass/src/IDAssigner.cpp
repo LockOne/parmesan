@@ -81,7 +81,7 @@ public:
 char IDAssigner::ID = 0;
 IDAssigner::IDAssigner() : ModulePass(ID) {}
 IDAssigner::~IDAssigner() = default;
-std::set<std::tuple<IDAssigner::IdentifierType, IDAssigner::IdentifierType>> CfgEdges;
+std::set<std::tuple<IDAssigner::IdentifierType, IDAssigner::IdentifierType>> CfgEdges = {};
 std::set<std::string> TraceFunctions = {"__angora_trace_cmp", "__angora_trace_switch", "__dfsw___angora_trace_cmp_tt", "__dfsw___angora_trace_exploit_val_tt", "__dfsw___angora_trace_switch_tt", "__dfsw___angora_trace_fn_tt"};
 
 Type *VoidTy;
@@ -168,7 +168,7 @@ bool IDAssigner::runOnModule(Module &M) {
       for (unsigned I = 0, NSucc = TInst->getNumSuccessors(); I < NSucc; ++I) {
           BasicBlock *Succ = TInst->getSuccessor(I);
           auto dstId = IdMap[&*Succ];
-          CfgEdges.insert({srcId, dstId});
+          CfgEdges.insert(std::make_tuple(srcId, dstId));
       }
       cmpBbSet.insert(srcId);
       for (auto &I : BB) {
@@ -386,7 +386,7 @@ const IDAssigner::CmpsCfg IDAssigner::getCmpCfg() const {
   for (auto e : CfgEdges) {
     IdentifierType src,dst;
     std::tie(src,dst) = e;
-    result.insert({rev_map[src], rev_map[dst]});
+    result.insert(std::make_tuple(rev_map[src], rev_map[dst]));
   }
   return result;
 }
